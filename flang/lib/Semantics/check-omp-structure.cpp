@@ -1340,15 +1340,7 @@ void OmpStructureChecker::Leave(const parser::OpenMPConstruct &x) {
 }
 
 void OmpStructureChecker::Enter(const parser::OpenMPDeclarativeConstruct &x) {
-  std::size_t firstVariant{metadirectiveVariantScopeStarts_.empty()
-          ? 0
-          : metadirectiveVariantScopeStarts_.back()};
-  if (firstVariant < metadirectiveLoopVariants_.size()) {
-    // An OpenMP declarative directive between a loop-associated
-    // metadirective and a DO construct in the same scope interrupts their
-    // association. Preserve pending variants from enclosing scopes.
-    CheckMetadirectiveVariantsWithoutLoop(firstVariant);
-  }
+  CheckMetadirectiveLoopAssociationInterruptedByDirective();
 
   DirectiveSpellingVisitor visitor(
       [this](parser::CharBlock source, llvm::omp::Directive id) {
@@ -1364,6 +1356,14 @@ void OmpStructureChecker::Enter(const parser::OpenMPDeclarativeConstruct &x) {
       llvm::iterator_range(std::list<parser::OmpClause>{}));
 
   EnterDirectiveNest(DeclarativeNest);
+}
+
+void OmpStructureChecker::Enter(const parser::OpenACCDeclarativeConstruct &) {
+  CheckMetadirectiveLoopAssociationInterruptedByDirective();
+}
+
+void OmpStructureChecker::Enter(const parser::OpenACCRoutineConstruct &) {
+  CheckMetadirectiveLoopAssociationInterruptedByDirective();
 }
 
 void OmpStructureChecker::Leave(const parser::OpenMPDeclarativeConstruct &x) {

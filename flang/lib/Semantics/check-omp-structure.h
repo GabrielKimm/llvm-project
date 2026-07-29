@@ -109,6 +109,8 @@ public:
   void Leave(const parser::OpenMPConstruct &);
   void Enter(const parser::OpenMPDeclarativeConstruct &);
   void Leave(const parser::OpenMPDeclarativeConstruct &);
+  void Enter(const parser::OpenACCDeclarativeConstruct &);
+  void Enter(const parser::OpenACCRoutineConstruct &);
 
   void Enter(const parser::OpenMPMisplacedEndDirective &);
   void Leave(const parser::OpenMPMisplacedEndDirective &);
@@ -319,6 +321,7 @@ private:
   void BeginMetadirectiveSelection();
   void EndMetadirectiveSelection(const parser::OmpClauseList &);
   void CheckMetadirectiveVariantsWithoutLoop(std::size_t firstVariant = 0);
+  void CheckMetadirectiveLoopAssociationInterruptedByDirective();
   void CheckOmpDeclareVariantDirective(
       const parser::OmpDeclareVariantDirective &);
   void CheckDeclareVariantUserConditions(const parser::OmpContextSelector &);

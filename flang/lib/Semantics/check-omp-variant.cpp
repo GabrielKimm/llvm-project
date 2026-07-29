@@ -1158,6 +1158,19 @@ void OmpStructureChecker::CheckMetadirectiveVariantsWithoutLoop(
   }
 }
 
+void OmpStructureChecker::
+    CheckMetadirectiveLoopAssociationInterruptedByDirective() {
+  std::size_t firstVariant{metadirectiveVariantScopeStarts_.empty()
+          ? 0
+          : metadirectiveVariantScopeStarts_.back()};
+  if (firstVariant < metadirectiveLoopVariants_.size()) {
+    // A declarative directive between a loop-associated metadirective and a
+    // DO construct in the same scope interrupts their association. Preserve
+    // pending variants from enclosing scopes.
+    CheckMetadirectiveVariantsWithoutLoop(firstVariant);
+  }
+}
+
 static const parser::traits::OmpContextSelectorSpecification *
 getMatchClauseContextSelector(const parser::OmpDirectiveSpecification &spec) {
   for (const parser::OmpClause &clause : spec.Clauses().v) {
