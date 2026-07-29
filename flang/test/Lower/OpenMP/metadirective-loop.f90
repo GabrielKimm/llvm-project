@@ -22,6 +22,31 @@ subroutine test_do(n, a)
   end do
 end subroutine
 
+! The score is compared before explicitness, so a higher-scored implicit
+! NOTHING is selected over an explicit DO when its condition is true.
+! CHECK-LABEL: func.func @_QPtest_implicit_nothing_score(
+! CHECK:         %[[FLAG:.*]] = fir.load {{.*}} : !fir.ref<!fir.logical<4>>
+! CHECK:         %[[COND:.*]] = fir.convert %[[FLAG]]
+! CHECK:         fir.if %[[COND]] {
+! CHECK-NOT:       omp.
+! CHECK:           fir.do_loop
+! CHECK:         } else {
+! CHECK:           omp.wsloop
+! CHECK:             omp.loop_nest
+! CHECK:         }
+! CHECK:         return
+subroutine test_implicit_nothing_score(flag, n, a)
+  logical, intent(in) :: flag
+  integer :: n, a(n), i
+  !$omp metadirective &
+  !$omp & when(user={condition(score(10): flag)}:) &
+  !$omp & when(user={condition(score(5): .true.)}: do) &
+  !$omp & otherwise(nothing)
+  do i = 1, n
+    a(i) = i
+  end do
+end subroutine
+
 ! CHECK-LABEL: func.func @_QPtest_simd(
 ! CHECK-NOT:     omp.wsloop
 ! CHECK:         omp.simd linear(
@@ -222,6 +247,8 @@ end subroutine
 ! CHECK-NOT:     omp.wsloop
 ! CHECK-NOT:     omp.loop_nest
 ! CHECK:         omp.parallel
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
 ! CHECK:           fir.do_loop
 ! CHECK:             hlfir.assign
 ! CHECK-NOT:       fir.do_loop
@@ -237,6 +264,37 @@ subroutine test_unselected_do_with_block_variant(n, a)
     a(i) = i
   end do
   !$omp end metadirective
+end subroutine
+
+! A lower-ranked candidate guarded by the same runtime expression is
+! unreachable: when FLAG is true the higher-ranked BARRIER wins, and when it
+! is false neither guarded candidate matches. Do not emit a dead OpenMP loop.
+! CHECK-LABEL: func.func @_QPtest_unreachable_same_runtime_condition(
+! CHECK-NOT:     omp.wsloop
+! CHECK-NOT:     omp.loop_nest
+! CHECK:         fir.if {{.*}} {
+! CHECK:           omp.barrier
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK:         } else {
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK:         }
+! CHECK:         fir.do_loop
+! CHECK:           hlfir.assign
+! CHECK-NOT:     omp.wsloop
+! CHECK-NOT:     omp.loop_nest
+! CHECK:         return
+subroutine test_unreachable_same_runtime_condition(flag, n, a)
+  logical, intent(in) :: flag
+  integer :: n, a(n), i
+  !$omp metadirective &
+  !$omp & when(user={condition(score(2): flag)}: barrier) &
+  !$omp & when(user={condition(score(1): flag)}: do) &
+  !$omp & otherwise(nothing)
+  do i = 1, n
+    a(i) = i
+  end do
 end subroutine
 
 ! CHECK-LABEL: func.func @_QPtest_dynamic_loop(

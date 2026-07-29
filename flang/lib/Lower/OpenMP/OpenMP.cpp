@@ -6182,7 +6182,7 @@ static void genMetadirective(lower::AbstractConverter &converter,
 
   llvm::SmallVector<const parser::OmpDirectiveSpecification *, 4>
       reachableVariantSpecs = semantics::omp::GetReachableMetadirectiveVariants(
-          *candidateSet, ompCtx);
+          *candidateSet, ompCtx, semaCtx);
 
   bool hasLoopAssociatedCandidate =
       llvm::any_of(reachableVariantSpecs, [](const auto *spec) {
@@ -6371,11 +6371,9 @@ static void genMetadirective(lower::AbstractConverter &converter,
       return;
     }
 
-    llvm::SmallVector<unsigned, 4> elsePathCandidates(remainingCandidates);
-    auto *remainingIt = llvm::find(elsePathCandidates, *selected);
-    assert(remainingIt != elsePathCandidates.end() &&
-           "selected candidate missing from remaining candidates");
-    elsePathCandidates.erase(remainingIt);
+    llvm::SmallVector<unsigned, 4> elsePathCandidates =
+        semantics::omp::GetMetadirectiveElsePathCandidates(
+            *selected, remainingCandidates, candidates, semaCtx);
 
     // match_any may create a guarded condition-true candidate and an unguarded
     // static candidate for the same directive. If the else path picks the

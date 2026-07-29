@@ -387,6 +387,48 @@ subroutine unreachable_ranked_interrupted_association(n, a)
   end do
 end subroutine
 
+! Repeating the same runtime guard does not make a lower-ranked candidate
+! reachable. If FLAG is true the higher-ranked candidate wins; if it is false
+! neither candidate matches.
+subroutine unreachable_same_runtime_condition_collapse(n, a, flag)
+  integer :: n, a(n), i
+  logical :: flag
+  !$omp metadirective &
+  !$omp& when(user={condition(score(2): flag)}: do) &
+  !$omp& when(user={condition(score(1): flag)}: do collapse(2)) &
+  !$omp& default(nothing)
+  do i = 1, n
+    a(i) = i
+  end do
+end subroutine
+
+subroutine unreachable_same_runtime_condition_iteration_variable(n, a, flag)
+  integer :: n, a(n)
+  logical :: flag
+  real :: i
+  !$omp metadirective &
+  !$omp& when(user={condition(score(2): flag)}: nothing) &
+  !$omp& when(user={condition(score(1): flag)}: do) &
+  !$omp& default(nothing)
+  do i = 1, n
+    a(int(i)) = int(i)
+  end do
+end subroutine
+
+subroutine unreachable_same_runtime_condition_interruption(n, a, flag)
+  integer :: n, a(n), i
+  integer, save :: x
+  logical :: flag
+  !$omp metadirective &
+  !$omp& when(user={condition(score(2): flag)}: nothing) &
+  !$omp& when(user={condition(score(1): flag)}: do) &
+  !$omp& default(nothing)
+  !$omp threadprivate(x)
+  do i = 1, n
+    a(i) = i
+  end do
+end subroutine
+
 subroutine dynamic_ranked_collapse(n, a, flag)
   integer :: n, a(n), i
   logical :: flag

@@ -2652,24 +2652,16 @@ std::optional<MetadirectiveCandidateSet> BuildMetadirectiveCandidateSet(
         if (hasMatchAny && isStaticVMIApplicable) {
           // Represent both outcomes: a guarded candidate with the condition's
           // score and an unguarded candidate with only the static traits.
-          if (isExplicit) {
-            llvm::omp::VariantMatchInfo conditionTrueVMI{staticVMI};
-            addConditionTraitForRanking(conditionTrueVMI);
-            result.candidates.push_back({spec, std::move(conditionTrueVMI),
-                isExplicit, dynamicCondition});
-          }
+          llvm::omp::VariantMatchInfo conditionTrueVMI{staticVMI};
+          addConditionTraitForRanking(conditionTrueVMI);
+          result.candidates.push_back({spec, std::move(conditionTrueVMI),
+              isExplicit, dynamicCondition});
           result.candidates.push_back({spec, std::move(staticVMI), isExplicit});
           continue;
         }
 
         llvm::omp::VariantMatchInfo rankingVMI{staticVMI};
-        // An omitted directive is implicit NOTHING and must not gain rank from
-        // the runtime condition. Explicit NOTHING remains a normal variant.
-        if (!isExplicit && hasMatchAny && !isStaticVMIApplicable) {
-          rankingVMI = llvm::omp::VariantMatchInfo();
-        } else if (isExplicit) {
-          addConditionTraitForRanking(rankingVMI);
-        }
+        addConditionTraitForRanking(rankingVMI);
         result.candidates.push_back({spec, std::move(rankingVMI), isExplicit,
             dynamicCondition, /*conditionShouldBeTrue=*/!hasMatchNone});
         continue;
@@ -2733,9 +2725,42 @@ std::optional<unsigned> SelectBestMetadirectiveCandidate(
   return candidateOrder[bestIndex];
 }
 
+llvm::SmallVector<unsigned, 4> GetMetadirectiveElsePathCandidates(
+    unsigned selectedIndex, llvm::ArrayRef<unsigned> candidateIndices,
+    llvm::ArrayRef<MetadirectiveCandidate> candidates,
+    SemanticsContext &context) {
+  CHECK(selectedIndex < candidates.size());
+  const MetadirectiveCandidate &selected{candidates[selectedIndex]};
+  CHECK(selected.dynamicCondition);
+  const SomeExpr *selectedExpr{
+      GetExpr(context, *selected.dynamicCondition->expr)};
+
+  llvm::SmallVector<unsigned, 4> result;
+  result.reserve(candidateIndices.size());
+  for (unsigned index : candidateIndices) {
+    if (index == selectedIndex) {
+      continue;
+    }
+
+    const MetadirectiveCandidate &candidate{candidates[index]};
+    bool hasSameFailedCondition{candidate.dynamicCondition &&
+        candidate.conditionShouldBeTrue == selected.conditionShouldBeTrue};
+    if (hasSameFailedCondition) {
+      const SomeExpr *candidateExpr{
+          GetExpr(context, *candidate.dynamicCondition->expr)};
+      hasSameFailedCondition =
+          selectedExpr && candidateExpr && *selectedExpr == *candidateExpr;
+    }
+    if (!hasSameFailedCondition) {
+      result.push_back(index);
+    }
+  }
+  return result;
+}
+
 llvm::SmallVector<const parser::OmpDirectiveSpecification *, 4>
 GetReachableMetadirectiveVariants(const MetadirectiveCandidateSet &candidateSet,
-    const OmpVariantMatchContext &matchContext) {
+    const OmpVariantMatchContext &matchContext, SemanticsContext &context) {
   llvm::SmallVector<unsigned, 4> candidates;
   candidates.reserve(candidateSet.candidates.size());
   for (unsigned index{0}; index < candidateSet.candidates.size(); ++index) {
@@ -2759,9 +2784,8 @@ GetReachableMetadirectiveVariants(const MetadirectiveCandidateSet &candidateSet,
       break;
     }
 
-    auto selectedIt{llvm::find(candidates, *selected)};
-    CHECK(selectedIt != candidates.end());
-    candidates.erase(selectedIt);
+    candidates = GetMetadirectiveElsePathCandidates(
+        *selected, candidates, candidateSet.candidates, context);
 
     if (std::optional<unsigned> selectedInElse{SelectBestMetadirectiveCandidate(
             candidates, candidateSet.candidates, matchContext)}) {

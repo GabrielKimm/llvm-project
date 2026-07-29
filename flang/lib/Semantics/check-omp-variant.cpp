@@ -784,7 +784,7 @@ void OmpStructureChecker::EndMetadirectiveSelection(
   }
 
   llvm::SmallVector<const parser::OmpDirectiveSpecification *, 4> reachable{
-      GetReachableMetadirectiveVariants(*candidateSet, matchContext)};
+      GetReachableMetadirectiveVariants(*candidateSet, matchContext, context_)};
   auto first{metadirectiveLoopVariants_.begin() + firstVariant};
   metadirectiveLoopVariants_.erase(
       std::remove_if(first, metadirectiveLoopVariants_.end(),

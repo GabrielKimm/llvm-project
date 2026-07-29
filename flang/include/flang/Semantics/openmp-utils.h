@@ -297,11 +297,19 @@ std::optional<unsigned> SelectBestMetadirectiveCandidate(
     llvm::ArrayRef<MetadirectiveCandidate> candidates,
     const OmpVariantMatchContext &matchContext);
 
+/// Return the candidates that remain after the dynamic condition guarding
+/// \p selectedIndex does not match. Candidates guarded by an equivalent
+/// condition with the same polarity are unreachable on that path.
+llvm::SmallVector<unsigned, 4> GetMetadirectiveElsePathCandidates(
+    unsigned selectedIndex, llvm::ArrayRef<unsigned> candidateIndices,
+    llvm::ArrayRef<MetadirectiveCandidate> candidates,
+    SemanticsContext &context);
+
 /// Return every replacement that can be selected, retaining lower-ranked
 /// candidates after a dynamic condition. Null represents NOTHING.
 llvm::SmallVector<const parser::OmpDirectiveSpecification *, 4>
 GetReachableMetadirectiveVariants(const MetadirectiveCandidateSet &candidateSet,
-    const OmpVariantMatchContext &matchContext);
+    const OmpVariantMatchContext &matchContext, SemanticsContext &context);
 
 /// True if a variant guarded by \p selector may be selected in the current
 /// compilation context.

@@ -29,56 +29,100 @@ subroutine test_vendor_no_match()
 #endif
 end subroutine
 
-! An inapplicable variant must not have its clauses lowered.
-! CHECK-LABEL: func.func @_QPtest_inapplicable_assume()
-! CHECK-NOT:     llvm.intr.assume
+! A selected variant provides a positive control: its clause expression is
+! lowered and attached to the replacement directive.
+! CHECK-LABEL: func.func @_QPtest_selected_clause(
+! CHECK:         %[[NUM_THREADS:.*]] = fir.call @_QPmetadirective_num_threads()
+! CHECK:         omp.parallel num_threads(%[[NUM_THREADS]] : i32)
+! CHECK:           hlfir.assign
+! CHECK:         return
+subroutine test_selected_clause(x)
+  integer :: x, metadirective_num_threads
+  external :: metadirective_num_threads
+  !$omp begin metadirective &
+  !$omp & when(implementation={vendor(llvm)}: &
+  !$omp &   parallel num_threads(metadirective_num_threads())) &
+#ifdef OMP_52
+  !$omp & otherwise(nothing)
+#else
+  !$omp & default(nothing)
+#endif
+  x = 1
+  !$omp end metadirective
+end subroutine
+
+! An inapplicable variant must not have its clause expression or directive
+! lowered.
+! CHECK-LABEL: func.func @_QPtest_inapplicable_clause(
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
+! CHECK-NOT:     omp.parallel
 ! CHECK:         fir.call @_FortranAioOutputInteger32
 ! CHECK-NOT:     fir.call @_FortranAioOutputInteger32
-! CHECK-NOT:     llvm.intr.assume
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
+! CHECK-NOT:     omp.parallel
 ! CHECK:         return
-subroutine test_inapplicable_assume()
-  !$omp metadirective &
-  !$omp & when(implementation={vendor("unknown")}: assume holds(.true.)) &
+subroutine test_inapplicable_clause()
+  integer :: metadirective_num_threads
+  external :: metadirective_num_threads
+  !$omp begin metadirective &
+  !$omp & when(implementation={vendor("unknown")}: &
+  !$omp &   parallel num_threads(metadirective_num_threads())) &
 #ifdef OMP_52
   !$omp & otherwise(nothing)
 #else
   !$omp & default(nothing)
 #endif
   print *, 1
+  !$omp end metadirective
 end subroutine
 
 ! An unselected fallback must not have its clauses lowered.
-! CHECK-LABEL: func.func @_QPtest_unselected_fallback_clause()
-! CHECK-NOT:     llvm.intr.assume
-! CHECK:         omp.barrier
-! CHECK-NOT:     llvm.intr.assume
+! CHECK-LABEL: func.func @_QPtest_unselected_fallback_clause(
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
+! CHECK:         omp.parallel
+! CHECK-NOT:     num_threads
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
+! CHECK:           hlfir.assign
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
 ! CHECK:         return
-subroutine test_unselected_fallback_clause()
-  !$omp metadirective &
-  !$omp & when(implementation={vendor(llvm)}: barrier) &
+subroutine test_unselected_fallback_clause(x)
+  integer :: x, metadirective_num_threads
+  external :: metadirective_num_threads
+  !$omp begin metadirective &
+  !$omp & when(implementation={vendor(llvm)}: parallel) &
 #ifdef OMP_52
-  !$omp & otherwise(assume holds(.true.))
+  !$omp & otherwise(parallel num_threads(metadirective_num_threads()))
 #else
-  !$omp & default(assume holds(.true.))
+  !$omp & default(parallel num_threads(metadirective_num_threads()))
 #endif
+  x = 1
+  !$omp end metadirective
 end subroutine
 
 ! A statically applicable but lower-ranked candidate must not have its clauses
 ! lowered either.
-! CHECK-LABEL: func.func @_QPtest_unselected_ranked_clause()
-! CHECK-NOT:     llvm.intr.assume
-! CHECK:         omp.barrier
-! CHECK-NOT:     llvm.intr.assume
+! CHECK-LABEL: func.func @_QPtest_unselected_ranked_clause(
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
+! CHECK:         omp.parallel
+! CHECK-NOT:     num_threads
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
+! CHECK:           hlfir.assign
+! CHECK-NOT:     fir.call @_QPmetadirective_num_threads
 ! CHECK:         return
-subroutine test_unselected_ranked_clause()
-  !$omp metadirective &
-  !$omp & when(user={condition(score(1): .true.)}: assume holds(.true.)) &
-  !$omp & when(user={condition(score(2): .true.)}: barrier) &
+subroutine test_unselected_ranked_clause(x)
+  integer :: x, metadirective_num_threads
+  external :: metadirective_num_threads
+  !$omp begin metadirective &
+  !$omp & when(user={condition(score(1): .true.)}: &
+  !$omp &   parallel num_threads(metadirective_num_threads())) &
+  !$omp & when(user={condition(score(2): .true.)}: parallel) &
 #ifdef OMP_52
   !$omp & otherwise(nothing)
 #else
   !$omp & default(nothing)
 #endif
+  x = 1
+  !$omp end metadirective
 end subroutine
 
 ! CHECK-LABEL: func.func @_QPtest_standalone_barrier_match()
