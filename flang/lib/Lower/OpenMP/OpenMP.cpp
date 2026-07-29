@@ -6031,6 +6031,21 @@ static bool hasUnsupportedDataSharingClause(const ConstructQueue &queue,
   });
 }
 
+static bool hasEagerPrivatizationClause(const ConstructQueue &queue,
+                                        unsigned version) {
+  return llvm::any_of(queue, [version](const auto &item) {
+    return llvm::any_of(item.clauses, [version](const Clause &ompClause) {
+      if (const auto *defaultClause =
+              std::get_if<clause::Default>(&ompClause.u)) {
+        using DataSharingAttribute = clause::Default::DataSharingAttribute;
+        return defaultClause->v == DataSharingAttribute::Private ||
+               defaultClause->v == DataSharingAttribute::Firstprivate;
+      }
+      return llvm::omp::isPrivatizingClause(ompClause.id, version);
+    });
+  });
+}
+
 class SymbolDSAGuard {
 public:
   ~SymbolDSAGuard() {
@@ -6245,6 +6260,13 @@ static void genMetadirective(lower::AbstractConverter &converter,
     ConstructQueue queue{
         buildConstructQueue(converter.getFirOpBuilder().getModule(), semaCtx,
                             eval, spec->source, spec->DirId(), variantClauses)};
+    unsigned ompVersion{semaCtx.langOptions().OpenMPVersion};
+
+    // Eager privatization relies on variant-local host associations that name
+    // resolution cannot create for a metadirective replacement.
+    if (!enableDelayedPrivatization &&
+        hasEagerPrivatizationClause(queue, ompVersion))
+      TODO(variantLoc, "METADIRECTIVE variant with eager privatization");
 
     if (llvm::any_of(queue, [](const auto &item) {
           return llvm::omp::allTargetSet.test(item.id);
@@ -6276,8 +6298,7 @@ static void genMetadirective(lower::AbstractConverter &converter,
         TODO(variantLoc,
              "data-environment construct in loop-associated METADIRECTIVE "
              "variant");
-      if (hasUnsupportedDataSharingClause(queue,
-                                          semaCtx.langOptions().OpenMPVersion))
+      if (hasUnsupportedDataSharingClause(queue, ompVersion))
         TODO(variantLoc,
              "data-sharing clause in loop-associated METADIRECTIVE variant");
       if (!isSupportedMetadirectiveLoopQueue(queue))
