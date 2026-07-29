@@ -1332,6 +1332,10 @@ void OmpStructureChecker::Leave(const parser::OpenMPConstruct &x) {
     assert(dirName.v == GetContext().directive && "Context mismatch");
     dirContext_.pop_back();
   }
+  if (parser::Unwrap<parser::OmpDelimitedMetadirectiveDirective>(x.u)) {
+    CHECK(!metadirectiveConstructContexts_.empty());
+    metadirectiveConstructContexts_.pop_back();
+  }
   constructStack_.pop_back();
 }
 
@@ -1776,6 +1780,7 @@ void OmpStructureChecker::Enter(const parser::OmpBeginDirective &x) {
   switch (x.DirId()) {
   case llvm::omp::Directive::OMPD_metadirective:
     // Delimited METADIRECTIVE
+    metadirectiveConstructContexts_.emplace_back();
     EnterDirectiveNest(MetadirectiveNest);
     BeginMetadirectiveSelection();
     break;

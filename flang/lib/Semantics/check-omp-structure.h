@@ -23,6 +23,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Frontend/OpenMP/OMP.h"
+#include "llvm/Frontend/OpenMP/OMPContext.h"
 
 #include <cstddef>
 #include <functional>
@@ -545,9 +546,23 @@ private:
     const parser::OmpDirectiveSpecification *spec;
     bool checkDefaultNoneInAssociatedLoop;
   };
+  using ConstructTraitSequence = llvm::SmallVector<llvm::omp::TraitProperty, 8>;
+  struct MetadirectiveConditionConstraint {
+    const parser::ScalarExpr *expr;
+    bool value;
+    const parser::OmpClauseList *owner;
+  };
+  struct MetadirectiveConstructAlternative {
+    ConstructTraitSequence traits;
+    llvm::SmallVector<MetadirectiveConditionConstraint, 2> conditions;
+  };
+  struct MetadirectiveConstructContext {
+    llvm::SmallVector<MetadirectiveConstructAlternative, 2> alternatives;
+  };
   std::vector<MetadirectiveLoopVariant> metadirectiveLoopVariants_;
   std::vector<std::size_t> metadirectiveVariantScopeStarts_;
   std::vector<std::size_t> metadirectiveSelectionStarts_;
+  std::vector<MetadirectiveConstructContext> metadirectiveConstructContexts_;
   const parser::traits::OmpContextSelectorSpecification *currentWhenSelector_{
       nullptr};
 
